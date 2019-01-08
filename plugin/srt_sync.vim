@@ -18,7 +18,7 @@ fun! DelaySrt(...)
         if len(delay) == 0 | return | endif  " then <Esc> suffices instead of <C-c>
     endif
 
-    let signed_int = '\v^[-+]?\d+$'
+    let signed_int = '\v^-?\d+$'
     let timecode = '\v^\d{2}:\d{2}:\d{2},\d{3}$'
     if delay =~ signed_int
         let delay = str2nr(delay)
