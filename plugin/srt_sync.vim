@@ -19,11 +19,12 @@ fun! DelaySrt(...)
     endif
 
     let signed_int = '\v^-?\d+$'
-    let timecode = '\v^\d{2}:\d{2}:\d{2},\d{3}$'
+    let timecode = '\v^-?\d{2}:\d{2}:\d{2},\d{3}$'
     if delay =~ signed_int
         let delay = str2nr(delay)
     elseif delay =~ timecode
-        let delay = s:TimecodeStringToMillis(delay)
+        let opt_neg = (delay =~ '^-' ? -1 : 1)
+        let delay = s:TimecodeStringToMillis(delay) * opt_neg
     else
         redraw | echo 'Cannot apply: malformed input' | return
     endif
