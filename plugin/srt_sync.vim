@@ -2,7 +2,7 @@
 " Author: Gyorgy Andorka <gyorgy.andorka@protonmail.com>
 " License: The Unlicense
 
-" Exposes a function that allows synchronizing SRT subtitles when there is no
+" Defines a command that allows synchronizing SRT subtitles when there is no
 " time scale difference with the video file. Delay time can be given in
 " milliseconds or SRT timecode format, which will be applied to all timestamps
 " in the currently opened file.
@@ -10,42 +10,53 @@
 
 " Public {{{
 
-fun! DelaySrt(...)
-    let delay = get(a:, 1)
-    if delay == v:false  " fail with any malformed string instead of prompting
-        let delay = trim(input('Delay in milliseconds'
-                    \ . ' or SRT timecode format (HH:MM:SS,MIL): '))
-        if len(delay) == 0 | return | endif  " then <Esc> suffices instead of <C-c>
-    endif
-
-    let signed_int = '\v^-?\d+$'
-    let timecode = '\v^-?\d{2}:\d{2}:\d{2},\d{3}$'
-    if delay =~ signed_int
-        let delay = str2nr(delay)
-    elseif delay =~ timecode
-        let opt_neg = (delay =~ '^-' ? -1 : 1)
-        let delay = s:TimecodeStringToMillis(delay) * opt_neg
-    else
-        redraw | echo 'Cannot apply: malformed input' | return
-    endif
-
-    try
-        call s:ApplyDelay(delay)
-    catch 'illegal timecode value'
-        " We can assume this error will be thrown right at the very first
-        " timecode line, if at all, so no state change to worry about.
-        redraw | echo 'Cannot apply: the given delay time would result'
-                    \ . ' in negative timecode value(s)'
-    endtry
-endfun
+" I don't yet really understand why, but the final `redraw!` command does not
+" work properly if placed inside the function (the command line is cleared all
+" right, but there is a funny side effect which looks like as if a visual
+" selection is applied to the whole screen). So here is a command instead
+" (might be more convenient anyway).
+command! -nargs=? DelaySrt call s:DelaySrt('<args>')
+            \ | redraw! | echo s:errormsg | let s:errormsg = ""
 
 " }}}
 
 " Local {{{
 
+let s:errormsg = ""
+
+fun! s:DelaySrt(delay)
+    let delay = a:delay
+    if delay == ""
+        let delay = trim(input('Delay in milliseconds'
+                    \ . ' or SRT timecode format (HH:MM:SS,MIL): '))
+        if len(delay) == 0 | return | endif  " then <Esc> suffices instead of <C-c>
+    endif
+
+    let timecode = '\v^-?\d{2}:\d{2}:\d{2},\d{3}$'
+    let signed_int = '\v^-?\d+$'
+    if delay =~ timecode
+        let opt_neg = (delay =~ '^-' ? -1 : 1)
+        let delay = s:TimecodeStringToMillis(delay) * opt_neg
+    elseif delay !~ signed_int
+        let s:errormsg = 'Cannot apply: malformed input' | return
+    endif
+    if delay == 0 | return | endif
+
+    try
+        redraw | echo "Shifting subtitles..."
+        call s:ApplyDelay(delay)
+    catch 'illegal timecode value'
+        " We can assume this error will be thrown right at the very first
+        " timecode line, if at all, so no state change to worry about.
+        let s:errormsg = 'Cannot apply: the given delay time would result'
+                    \ . ' in negative timecode value(s)'
+        return
+    endtry
+endfun
+
 fun! s:ApplyDelay(delay)
-    let timecode_part = '\d{2}:\d{2}:\d{2},\d{3}'
-    let timecode_line = '\v^'.timecode_part.' --\> '.timecode_part.'\s*$'
+    let timecode = '\d{2}:\d{2}:\d{2},\d{3}'
+    let timecode_line = '\v^'.timecode.' --\> '.timecode.'\s*$'
     let saved_view = winsaveview()
     try
         for line_num in range(1, line('$'))
@@ -119,10 +130,7 @@ fun! s:Map(vals, fn)
     return new_vals
 endfun
 
-" }}}
-
-" Constants {{{
-
+" Constants
 let s:MILLIS_PER_SEC = 1000
 let s:MILLIS_PER_MIN = 1000 * 60
 let s:MILLIS_PER_HOUR = 1000 * 60 * 60
@@ -130,3 +138,4 @@ let s:SECS_PER_MIN = 60
 let s:MINS_PER_HOUR = 60
 
 " }}}
+
