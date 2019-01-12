@@ -36,7 +36,7 @@ fun! s:DelaySrt(delay)
     let signed_int = '\v^-?\d+$'
     if delay =~ timecode
         let opt_neg = (delay =~ '^-' ? -1 : 1)
-        let delay = s:TimecodeStringToMillis(delay) * opt_neg
+        let delay = opt_neg * s:TimecodeStringToMillis(delay)
     elseif delay !~ signed_int
         let s:errormsg = 'Cannot apply: malformed input' | return
     endif
@@ -56,14 +56,14 @@ endfun
 
 fun! s:ApplyDelay(delay)
     let timecode = '\d{2}:\d{2}:\d{2},\d{3}'
-    let timecode_line = '\v^'.timecode.' --\> '.timecode.'\s*$'
+    let timecode_line = '\v^' . timecode . ' --\> ' . timecode . '\s*$'
     let saved_view = winsaveview()
     try
         for line_num in range(1, line('$'))
             let line = (getline(line_num))
             if line =~ timecode_line
                 let delayed_line = s:DelayedLine(line, a:delay)
-                exe 'keepjumps '.line_num.'substitute/.*/\=delayed_line/'
+                exe 'keepjumps ' . line_num . 'substitute/.*/\=delayed_line/'
             endif
         endfor
     catch 'illegal timecode value'
