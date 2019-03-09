@@ -8,94 +8,75 @@
 " in the currently opened file.
 " *****************************************************************************
 
-" Public {{{
-
-" I don't yet really understand why, but the final `redraw!` command does not
-" work properly if placed inside the function (the command line is cleared all
-" right, but there is a funny side effect which looks like as if a visual
-" selection is applied to the whole screen). So here is a command instead
-" (might be more convenient anyway).
 command! -nargs=? DelaySrt call s:DelaySrt('<args>')
-            \ | redraw! | echo s:errormsg | let s:errormsg = ""
 
-" }}}
 
-" Local {{{
+let s:timecode_p = '\v\d{2}:\d{2}:\d{2},\d{3}'
 
-let s:errormsg = ""
+fun! s:DelaySrt(input)
+    let GetInput = {-> trim(input('Delay in milliseconds '
+                \ . 'or SRT timecode format (HH:MM:SS,XXX): '))}
 
-fun! s:DelaySrt(delay)
-    let delay = a:delay
-    if delay == ""
-        let delay = trim(input('Delay in milliseconds'
-                    \ . ' or SRT timecode format (HH:MM:SS,MIL): '))
-        if len(delay) == 0 | return | endif  " then <Esc> suffices instead of <C-c>
+    let input = a:input
+    if input == ""
+        let input = GetInput()
+        " then <Esc> suffices instead of <C-c>
+        if len(input) == 0 | return | endif
     endif
 
-    let timecode = '\v^-?\d{2}:\d{2}:\d{2},\d{3}$'
+    let delay = 0
     let signed_int = '\v^-?\d+$'
-    if delay =~ timecode
-        let opt_neg = (delay =~ '^-' ? -1 : 1)
-        let delay = opt_neg * s:TimecodeStringToMillis(delay)
-    elseif delay !~ signed_int
-        let s:errormsg = 'Cannot apply: malformed input' | return
-    endif
-    if delay == 0 | return | endif
-
-    try
-        redraw | echo "Shifting subtitles..."
-        call s:ApplyDelay(delay)
-    catch 'illegal timecode value'
-        " We can assume this error will be thrown right at the very first
-        " timecode line, if at all, so no state change to worry about.
-        let s:errormsg = 'Cannot apply: the given delay time would result'
-                    \ . ' in negative timecode value(s)'
+    let timecode_format = '\v^-?' . s:timecode_p . '$'
+    if input =~ signed_int
+        let delay = input
+    elseif input =~ timecode_format
+        let delay = (input =~ '^-' ? -1 : 1) * s:TimecodeToMillis(trim(input, '-'))
+    else
+        redraw | echo 'Cannot apply: malformed input'
         return
-    endtry
+    endif
+
+    if delay != 0
+        call s:DelayLines(delay)
+    endif
 endfun
 
-fun! s:ApplyDelay(delay)
-    let timecode = '\d{2}:\d{2}:\d{2},\d{3}'
-    let timecode_line = '\v^' . timecode . ' --\> ' . timecode . '\s*$'
+fun! s:DelayLines(delay)
+    let timecode_line_p = '\v^' . s:timecode_p . ' --\> ' . s:timecode_p . '\s*$'
     let saved_view = winsaveview()
+    redraw | echo "Shifting subtitles..."
     try
         for line_num in range(1, line('$'))
             let line = (getline(line_num))
-            if line =~ timecode_line
+            if line =~ timecode_line_p
                 let delayed_line = s:DelayedLine(line, a:delay)
-                exe 'keepjumps ' . line_num . 'substitute/.*/\=delayed_line/'
+                exe 'keepjumps keeppatterns ' . line_num . 's/.*/\=delayed_line/'
             endif
         endfor
+        redraw | echo ""
     catch 'illegal timecode value'
-        throw v:exception
+        redraw | echo 'Cannot apply: the given delay time would result'
+                    \ . ' in negative timecode value(s)'
     finally
-        call histdel('search', -1)
         call winrestview(saved_view)
     endtry
 endfun
 
-fun! s:DelayedLine(line, delay)
-    let timecodes = split(a:line, ' --> ')
-    let timecodes = s:Map(timecodes, function('trim'))
-    let times = s:Map(timecodes, function('s:TimecodeStringToMillis'))
-    try
-        let new_times = s:Map(times, function('s:AddDelay', [a:delay]))
-    catch 'illegal timecode value'
-        throw v:exception
-    endtry
-    let new_timecodes = s:Map(new_times, function('s:MillisToTimecodeString'))
-    let [new_start, new_end] = new_timecodes
-    return new_start.' --> '.new_end
+fun! s:DelayedLine(timecode_line, delay)
+    return substitute(a:timecode_line, s:timecode_p,
+                \ '\=s:DelayedTimecode(submatch(0), a:delay)', 'g')
 endfun
 
-fun! s:AddDelay(delay, time)
-    let new_time = a:time + a:delay
-    if new_time < 0 | throw 'illegal timecode value' | endif
-    return new_time
+fun! s:DelayedTimecode(timecode, delay)
+    let new_time = s:TimecodeToMillis(a:timecode) + a:delay
+    if new_time < 0
+        throw 'illegal timecode value'
+    endif
+    return s:MillisToTimecode(new_time)
 endfun
 
-fun! s:TimecodeStringToMillis(timecode_string)
-    let [hours_mins_secs, millis] = split(a:timecode_string, ',')
+fun! s:TimecodeToMillis(timecode)
+    let [hours_mins_secs, millis] = split(a:timecode, ',')
     let [hours, mins, secs] = split(hours_mins_secs, ':')
     return (hours * s:MILLIS_PER_HOUR)
                 \ + (mins * s:MILLIS_PER_MIN)
@@ -103,39 +84,24 @@ fun! s:TimecodeStringToMillis(timecode_string)
                 \ + millis
 endfun
 
-fun! s:MillisToTimecodeString(num)
-    fun! PadZeros(slots, val)
-        let zeros = repeat('0', a:slots - len(string(a:val)))
-        return zeros . a:val
+fun! s:MillisToTimecode(n)
+    fun! PadZeros(slots_to_fill, val)
+        let padding_zeros = repeat('0', a:slots_to_fill - len(string(a:val)))
+        return padding_zeros . a:val
     endfun
 
-    let hours = float2nr(floor(a:num / s:MILLIS_PER_HOUR))
-    let mins = float2nr(floor(a:num / s:MILLIS_PER_MIN)) % s:MINS_PER_HOUR
-    let secs = float2nr(floor(a:num / s:MILLIS_PER_SEC)) % s:SECS_PER_MIN
-    let millis = a:num % s:MILLIS_PER_SEC 
-
-    let [hours, mins, secs] = s:Map([hours, mins, secs], function('PadZeros', [2]))
+    let hours = float2nr(floor(a:n / s:MILLIS_PER_HOUR))
+    let mins = float2nr(floor(a:n / s:MILLIS_PER_MIN)) % s:MINS_PER_HOUR
+    let secs = float2nr(floor(a:n / s:MILLIS_PER_SEC)) % s:SECS_PER_MIN
+    let millis = a:n % s:MILLIS_PER_SEC
+    let [hours, mins, secs] = map([hours, mins, secs], {_, val -> PadZeros(2, val)})
     let millis = PadZeros(3, millis)
-
-    return hours.':'.mins.':'.secs.','.millis
+    return hours . ':' . mins . ':' . secs . ',' . millis
 endfun
 
-" More convenient than the built-in destructive version,
-" which feeds key-value pairs.
-fun! s:Map(vals, fn)
-    let new_vals = []
-    for val in a:vals
-        call add(new_vals, a:fn(val))
-    endfor
-    return new_vals
-endfun
-
-" Constants
 let s:MILLIS_PER_SEC = 1000
 let s:MILLIS_PER_MIN = 1000 * 60
 let s:MILLIS_PER_HOUR = 1000 * 60 * 60
 let s:SECS_PER_MIN = 60
 let s:MINS_PER_HOUR = 60
-
-" }}}
 
