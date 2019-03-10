@@ -26,10 +26,10 @@ fun! s:DelaySrt(input)
 
     let delay = 0
     let signed_int = '\v^-?\d+$'
-    let timecode_format = '\v^-?' . s:timecode_p . '$'
+    let signed_timecode = '\v^-?' . s:timecode_p . '$'
     if input =~ signed_int
         let delay = input
-    elseif input =~ timecode_format
+    elseif input =~ signed_timecode
         let delay = (input =~ '^-' ? -1 : 1) * s:TimecodeToMillis(trim(input, '-'))
     else
         redraw | echo 'Cannot apply: malformed input'
