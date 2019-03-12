@@ -54,6 +54,8 @@ fun! s:DelayLines(delay)
             endif
         endfor
         redraw | echo ""
+    " We can assume this error will be thrown right at the very first
+    " timecode line, if at all, so no state change to worry about.
     catch 'illegal timecode value'
         redraw | echo 'Cannot apply: the given delay time would result'
                     \ . ' in negative timecode value(s)'
