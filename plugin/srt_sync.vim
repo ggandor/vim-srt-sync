@@ -3,7 +3,7 @@
 " License: The Unlicense
 
 " Defines a command that allows synchronizing SRT subtitles when there is no
-" time scale difference with the video file. Shift time can be given in
+" time scale difference with the video file. Time shift can be given in
 " milliseconds or SRT timecode format, which will be applied to all timestamps
 " in the currently opened file.
 " *****************************************************************************
