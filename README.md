@@ -13,6 +13,6 @@ Source the plugin file in your .vimrc (or use your favorite plugin manager).
 Usage
 -----
 ```
-:DelaySrt [delay time in milliseconds or timecode format (HH:MM:SS,MIL)]
+:ShiftSrt [time shift in milliseconds or timecode format (HH:MM:SS,MIL)]
 ```
 When argument is not given, prompts for input.
