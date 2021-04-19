@@ -2,7 +2,6 @@
 " Author: Gyorgy Andorka <gyorgy.andorka@protonmail.com>
 " License: The Unlicense
 
-
 if exists('g:loaded_srt_sync') | finish | endif
 let g:loaded_srt_sync = 1
 
@@ -45,6 +44,11 @@ fun! s:ShiftLines(shift)
     let saved_view = winsaveview()
     redraw | echo "Shifting timecodes..."
     try
+        " Because of a bug that has later been fixed by 8.1.1061, we're
+        " using a loop instead of a global search/replace command, and
+        " initiate the substitution only if shifting the line does not
+        " throw an exception. (Before that, there was a chance of
+        " unexpected buffer modification.)
         for line_num in range(1, line('$'))
             let line = (getline(line_num))
             if line =~ s:timecode_line_p
