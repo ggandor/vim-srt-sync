@@ -1,17 +1,14 @@
-vim-srt-sync
-============
+# vim-srt-sync 🎥
 
-Add delay to SRT files from Vim without opening a heavyweight editor or using online tools.
+Add delay to .srt files from Vim without opening a heavyweight editor or using online tools.
 
 
-Installation
-------------
+## Installation
 
 Source the plugin file in your .vimrc (or use your favorite plugin manager).
 
 
-Usage
------
+## Usage
 ```
 :ShiftSrt <time shift>
 ```
